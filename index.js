@@ -8,7 +8,7 @@ const AiServer=express()
 AiServer.use(cors())
 AiServer.use(express.json())
 
-const PORT=3000 || process.env.PORT
+const PORT = process.env.PORT || 3000;
 
 AiServer.listen(PORT,()=>{
     console.log(`Server Started at PORT ${PORT}`);  
