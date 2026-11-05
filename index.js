@@ -1,12 +1,16 @@
 require('dotenv').config()
 const express = require('express');
 const cors =require('cors')
-require('./database/dbConnection')
+const connectDB = require('./database/dbConnection')
+const router = require('./routes/router');
 
 const AiServer=express()
 
 AiServer.use(cors())
 AiServer.use(express.json())
+
+connectDB();
+AiServer.use(router);
 
 const PORT = process.env.PORT || 3000;
 

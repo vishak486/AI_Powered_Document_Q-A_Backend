@@ -1,9 +1,24 @@
+// database/dbConnection.js
 const mongoose = require('mongoose');
 
-const dbConnection= process.env.DBCONNECTIONSTRING;
+const connectDB = async () => {
+    try {
+        const dbConnection = process.env.DBCONNECTIONSTRING;
+        
+        if (!dbConnection) {
+            throw new Error('DBCONNECTIONSTRING is not defined in .env');
+        }
 
-mongoose.connect(dbConnection).then(()=>{
-    console.log('Mongodb Atlas Connected Successfully');
-}).catch((err)=>{
-    console.log('MOngodb Atlas Connection Failed',err);
-})
+        await mongoose.connect(dbConnection);
+        console.log('✅ MongoDB Atlas Connected Successfully');
+        
+        // Log the database name for confirmation
+        console.log(`📂 Database: ${mongoose.connection.name}`);
+        
+    } catch (err) {
+        console.log('❌ MongoDB Atlas Connection Failed:', err.message);
+        process.exit(1);  // Exit if DB fails (important for production)
+    }
+};
+
+module.exports = connectDB;
