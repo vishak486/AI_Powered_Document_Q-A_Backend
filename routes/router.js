@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload');
-const { uploadDocument , askQuestion  } = require('../controllers/documentController');
+const { uploadDocument , askQuestion ,getDocuments , deleteDocument  } = require('../controllers/documentController');
 
 // Document routes
 router.post('/api/documents/upload', upload.single('file'), uploadDocument);
 router.post('/api/documents/ask', askQuestion);
-
+router.get('/api/documents', getDocuments);
+router.delete('/api/documents/:id', deleteDocument);
 
 module.exports = router;

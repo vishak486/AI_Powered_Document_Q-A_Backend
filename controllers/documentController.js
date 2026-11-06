@@ -144,3 +144,31 @@ ANSWER:`;
     }
 };
 
+
+exports.getDocuments = async (req, res) => {
+    try {
+        const documents = await Document.find().sort({ uploadedAt: -1 });
+        res.status(200).json({ documents });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.deleteDocument = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const document = await Document.findById(id);
+        if (!document) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+
+        await Chunk.deleteMany({ documentId: id });
+        await Document.findByIdAndDelete(id);
+
+        res.status(200).json({ message: 'Document and its chunks deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
