@@ -77,8 +77,8 @@ exports.askQuestion = async (req, res) => {
     try {
         const { documentId, question } = req.body;
 
-        if (!documentId || !question) {
-            return res.status(400).json({ error: 'documentId and question are required' });
+        if (!question) {
+            return res.status(400).json({ error: 'question is required' });
         }
 
         const queryVector = await embedQuery(question);
@@ -91,9 +91,11 @@ exports.askQuestion = async (req, res) => {
                     queryVector: queryVector,
                     numCandidates: 100,
                     limit: 3,
-                    filter: {
-                        documentId: new mongoose.Types.ObjectId(documentId)
-                    }
+                     ...(documentId && {
+                        filter: {
+                            documentId: new mongoose.Types.ObjectId(documentId)
+                        }
+                    })
                 }
             },
             {
@@ -143,16 +145,18 @@ exports.askQuestion = async (req, res) => {
             }
         }
         
-        await ChatHistory.create({
-            documentId,
-            question,
-            answer,
-            sources: chunks.map(c => ({
-                chunkIndex: c.chunkIndex,
-                score: c.score,
-                preview: c.content.substring(0, 100) + '...'
-            }))
-        });
+        if (documentId) {
+            await ChatHistory.create({
+                documentId,
+                question,
+                answer,
+                sources: chunks.map(c => ({
+                    chunkIndex: c.chunkIndex,
+                    score: c.score,
+                    preview: c.content.substring(0, 100) + '...'
+                }))
+            });
+        }
 
         res.status(200).json({
             answer,
