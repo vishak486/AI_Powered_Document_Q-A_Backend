@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Document = require('../models/Document');
-const Chunk = require('../models/Chunk');
+const Chunk = require('../models/Chunk')
+const ChatHistory = require('../models/ChatHistory');
 const { extractText, chunkText } = require('../services/pdfService');
 const { embedDocumentChunks, embedQuery } = require('../services/embeddingService');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -80,10 +81,8 @@ exports.askQuestion = async (req, res) => {
             return res.status(400).json({ error: 'documentId and question are required' });
         }
 
-        // Step 1: Convert question to embedding
         const queryVector = await embedQuery(question);
 
-        // Step 2: Vector search — find most relevant chunks
         const chunks = await Chunk.aggregate([
             {
                 $vectorSearch: {
@@ -110,24 +109,50 @@ exports.askQuestion = async (req, res) => {
             return res.status(404).json({ error: 'No relevant content found in the document' });
         }
 
-        // Step 3: Build context from matched chunks
         const context = chunks.map(c => c.content).join('\n\n');
-
-        // Step 4: Ask Gemini to answer based on context
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
 
         const prompt = `You are a helpful document assistant. Answer the question based ONLY on the provided context. If the answer is not in the context, say "I couldn't find this information in the document."
 
-CONTEXT:
-${context}
+        CONTEXT:
+        ${context}
 
-QUESTION:
-${question}
+        QUESTION:
+        ${question}
 
-ANSWER:`;
+        ANSWER:`;
 
-        const result = await model.generateContent(prompt);
-        const answer = result.response.text();
+        const models = [
+            'gemini-3.8-flash',
+            'gemini-3.5-flash-lite',
+        ];
+
+        let answer = '';
+
+        for (const modelName of models) {
+            try {
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(prompt);
+                answer = result.response.text();
+                console.log(`Answered using model: ${modelName}`);
+                break;
+            } catch (err) {
+                console.log(`Model ${modelName} failed: ${err.message}`);
+                if (modelName === models[models.length - 1]) {
+                    throw new Error('All models are currently unavailable. Please try again later.',err);
+                }
+            }
+        }
+        
+        await ChatHistory.create({
+            documentId,
+            question,
+            answer,
+            sources: chunks.map(c => ({
+                chunkIndex: c.chunkIndex,
+                score: c.score,
+                preview: c.content.substring(0, 100) + '...'
+            }))
+        });
 
         res.status(200).json({
             answer,
@@ -167,6 +192,19 @@ exports.deleteDocument = async (req, res) => {
         await Document.findByIdAndDelete(id);
 
         res.status(200).json({ message: 'Document and its chunks deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getChatHistory = async (req, res) => {
+    try {
+        const documentId = req.params.id;
+        const history = await ChatHistory.find({ documentId })
+            .sort({ createdAt: 1 })
+            .select('question answer sources createdAt');
+
+        res.status(200).json({ history });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
