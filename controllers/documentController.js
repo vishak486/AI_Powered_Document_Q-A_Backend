@@ -138,8 +138,8 @@ exports.askQuestion = async (req, res) => {
         ANSWER:`;
 
         const models = [
-            'gemini-3.8-flash',
             'gemini-3.5-flash-lite',
+            'gemini-3.8-flash',
         ];
 
         let answer = '';
@@ -147,7 +147,7 @@ exports.askQuestion = async (req, res) => {
         for (const modelName of models) {
             try {
                 const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await withTimeout(model.generateContent(prompt), 20000, modelName);
+                const result = await withTimeout(model.generateContent(prompt), 15000, modelName);
                 lap(`gemini_${modelName}`);
                 answer = result.response.text();
                 console.log(`Answered using model: ${modelName}`);
