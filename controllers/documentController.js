@@ -156,7 +156,7 @@ exports.askQuestion = async (req, res) => {
                 lap(`failed_${modelName}`);
                 console.log(`Model ${modelName} failed: ${err.message}`);
                 if (modelName === models[models.length - 1]) {
-                    throw new Error('All models are currently unavailable. Please try again later.',err);
+                    throw new Error('All models are currently unavailable. Please try again later.', { cause: err });
                 }
             }
         }
@@ -177,7 +177,6 @@ exports.askQuestion = async (req, res) => {
 
         res.status(200).json({
             answer,
-            timings,
             sources: chunks.map(c => ({
                 chunkIndex: c.chunkIndex,
                 score: c.score,
@@ -187,7 +186,7 @@ exports.askQuestion = async (req, res) => {
 
     } catch (error) {
         console.error('Chat error:', error.message);
-        res.status(500).json({ error: error.message || 'Failed to process question', timings });
+        res.status(500).json({ error: error.message || 'Failed to process question' });
     }
 };
 
