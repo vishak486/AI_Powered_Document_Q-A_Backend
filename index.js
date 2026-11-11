@@ -37,3 +37,53 @@ AiServer.get('/debug/gemini', async (req, res) => {
         res.status(500).json({ ok: false, ms: Date.now() - started, error: err.message });
     }
 });
+
+AiServer.get('/debug/search', async (req, res) => {
+    const mongoose = require('mongoose');
+    const Chunk = require('./models/Chunk');
+    const { embedQuery } = require('./services/embeddingService');
+
+    const withTimeout = (promise, ms, label) =>
+        Promise.race([
+            promise,
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+            )
+        ]);
+
+    const result = {};
+    let start = Date.now();
+    try {
+        const vector = await withTimeout(embedQuery('what is playwright'), 20000, 'Embedding');
+        result.embedMs = Date.now() - start;
+        result.dims = vector.length;
+
+        start = Date.now();
+        const chunks = await withTimeout(
+            Chunk.aggregate([
+                {
+                    $vectorSearch: {
+                        index: 'vector_index',
+                        path: 'embedding',
+                        queryVector: vector,
+                        numCandidates: 100,
+                        limit: 3
+                    }
+                },
+                { $project: { chunkIndex: 1, score: { $meta: 'vectorSearchScore' } } }
+            ]),
+            20000,
+            'Vector search'
+        );
+        result.searchMs = Date.now() - start;
+        result.found = chunks.length;
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(500).json({
+            ok: false,
+            ...result,
+            dbState: mongoose.connection.readyState,
+            error: err.message
+        });
+    }
+});
