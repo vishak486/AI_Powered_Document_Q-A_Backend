@@ -6,6 +6,14 @@ const { extractText, chunkText } = require('../services/pdfService');
 const { embedDocumentChunks, embedQuery } = require('../services/embeddingService');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const withTimeout = (promise, ms, label) =>
+    Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+        )
+    ]);
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 exports.uploadDocument = async (req, res) => {
@@ -74,20 +82,20 @@ exports.uploadDocument = async (req, res) => {
 
 
 exports.askQuestion = async (req, res) => {
+    const timings = {};
+    let last = Date.now();
+    const lap = (label) => { const now = Date.now(); timings[label] = now - last; last = now; };
     try {
         const { documentId, question } = req.body;
-        const timings = {};
-        let last = Date.now();
-        const lap = (label) => { const now = Date.now(); timings[label] = now - last; last = now; };
 
         if (!question) {
             return res.status(400).json({ error: 'question is required' });
         }
 
-        const queryVector = await embedQuery(question);
+        const queryVector = await withTimeout(embedQuery(question), 20000, 'Embedding');
         lap('embed');
 
-        const chunks = await Chunk.aggregate([
+        const chunks = await withTimeout(Chunk.aggregate([
             {
                 $vectorSearch: {
                     index: "vector_index",
@@ -109,7 +117,7 @@ exports.askQuestion = async (req, res) => {
                     score: { $meta: "vectorSearchScore" }
                 }
             }
-        ]);
+        ]), 20000, 'Vector Search');
 
         lap('vectorSearch');
 
@@ -139,7 +147,7 @@ exports.askQuestion = async (req, res) => {
         for (const modelName of models) {
             try {
                 const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent(prompt);
+                const result = await withTimeout(model.generateContent(prompt), 20000, modelName);
                 lap(`gemini_${modelName}`);
                 answer = result.response.text();
                 console.log(`Answered using model: ${modelName}`);
@@ -179,7 +187,7 @@ exports.askQuestion = async (req, res) => {
 
     } catch (error) {
         console.error('Chat error:', error.message);
-        res.status(500).json({ error: error.message || 'Failed to process question' });
+        res.status(500).json({ error: error.message || 'Failed to process question', timings });
     }
 };
 
