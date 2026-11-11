@@ -76,12 +76,16 @@ exports.uploadDocument = async (req, res) => {
 exports.askQuestion = async (req, res) => {
     try {
         const { documentId, question } = req.body;
+        const timings = {};
+        let last = Date.now();
+        const lap = (label) => { const now = Date.now(); timings[label] = now - last; last = now; };
 
         if (!question) {
             return res.status(400).json({ error: 'question is required' });
         }
 
         const queryVector = await embedQuery(question);
+        lap('embed');
 
         const chunks = await Chunk.aggregate([
             {
@@ -106,6 +110,8 @@ exports.askQuestion = async (req, res) => {
                 }
             }
         ]);
+
+        lap('vectorSearch');
 
         if (chunks.length === 0) {
             return res.status(404).json({ error: 'No relevant content found in the document' });
@@ -134,10 +140,12 @@ exports.askQuestion = async (req, res) => {
             try {
                 const model = genAI.getGenerativeModel({ model: modelName });
                 const result = await model.generateContent(prompt);
+                lap(`gemini_${modelName}`);
                 answer = result.response.text();
                 console.log(`Answered using model: ${modelName}`);
                 break;
             } catch (err) {
+                lap(`failed_${modelName}`);
                 console.log(`Model ${modelName} failed: ${err.message}`);
                 if (modelName === models[models.length - 1]) {
                     throw new Error('All models are currently unavailable. Please try again later.',err);
@@ -156,10 +164,12 @@ exports.askQuestion = async (req, res) => {
                     preview: c.content.substring(0, 100) + '...'
                 }))
             });
+            lap('saveHistory');
         }
 
         res.status(200).json({
             answer,
+            timings,
             sources: chunks.map(c => ({
                 chunkIndex: c.chunkIndex,
                 score: c.score,
