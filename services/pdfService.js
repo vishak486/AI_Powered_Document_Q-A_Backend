@@ -1,4 +1,5 @@
 const pdfParse = require('pdf-parse');
+const { RecursiveCharacterTextSplitter } = require('@langchain/textsplitters');
 
 async function extractText(buffer) {
     const result = await pdfParse(buffer);
@@ -11,33 +12,16 @@ async function extractText(buffer) {
     return text;
 }
 
-function chunkText(text, chunkSize = 1000, overlap = 200) {
-    const cleaned = text.replace(/\s+/g, ' ').trim();
-    const chunks = [];
-    let start = 0;
+async function chunkText(text, chunkSize = 1000, chunkOverlap = 200) {
+    const cleaned = text
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 
-    while (start < cleaned.length) {
-        let end = Math.min(start + chunkSize, cleaned.length);
+    const splitter = new RecursiveCharacterTextSplitter({ chunkSize, chunkOverlap });
+    const chunks = await splitter.splitText(cleaned);
 
-        if (end < cleaned.length) {
-            const lastSpace = cleaned.lastIndexOf(' ', end);
-            if (lastSpace > start) {
-                end = lastSpace;
-            }
-        }
-
-        const chunk = cleaned.slice(start, end).trim();
-        if (chunk) {
-            chunks.push(chunk);
-        }
-
-        if (end >= cleaned.length) break;
-
-        const nextStart = end - overlap;
-        start = nextStart > start ? nextStart : end;
-    }
-
-    return chunks;
+    return chunks.map((c) => c.trim()).filter(Boolean);
 }
 
 module.exports = { extractText, chunkText };

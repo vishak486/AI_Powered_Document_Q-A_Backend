@@ -35,7 +35,7 @@ exports.uploadDocument = async (req, res) => {
         const text = await extractText(req.file.buffer);
 
         // Step 3: Split into chunks
-        const chunks = chunkText(text);
+        const chunks = await chunkText(text);
 
         if (chunks.length === 0) {
             document.status = 'failed';
